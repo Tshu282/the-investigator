@@ -8,3 +8,5 @@ Capabilities (you gain a new one each week):
 “You are a security awareness trainer. Give me a memorable analogy for why password reuse is dangerous.”
 “You are an incident responder. A coworker says they clicked a suspicious link. Walk me through the first 3 things to do.”
 "You work in network infrastructure, How does zero trust architecture work, and why is it replacing traditional perimeter security?"
+
+  - Week 2: Can triage suspicious emails - check headers (SPF/DKIM/DMARC, Reply-To), flag urgency/secrecy/authority, recommend out-of-band verification

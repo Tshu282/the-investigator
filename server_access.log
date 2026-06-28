@@ -1,0 +1,14 @@
+2026-03-16 09:00:01 INFO - Connection established from 10.0.0.15 (HR_PC)
+2026-03-16 09:05:22 WARNING - FAILED LOGIN attempt from 192.168.1.50
+2026-03-16 09:06:10 INFO - User 'admin' logged in from 10.0.0.2
+2026-03-16 09:12:45 ERROR - FAILED LOGIN attempt from 192.168.1.50
+2026-03-16 09:15:00 INFO - Automated Backup started by 10.0.0.100
+2026-03-16 09:18:12 WARNING - FAILED LOGIN attempt from 192.168.1.50
+2026-03-16 09:20:33 INFO - Connection closed from 10.0.0.15
+2026-03-16 09:25:55 CRITICAL - FAILED LOGIN attempt from 203.0.113.42 (Moscow)
+2026-03-16 09:30:12 INFO - SSH session opened for 'guest_user'
+2026-03-16 09:35:44 WARNING - FAILED LOGIN attempt from 192.168.1.50
+2026-03-16 09:40:00 INFO - j_doe changed avatar to a 'Dancing Cat' gif
+2026-03-16 09:45:11 ERROR - FAILED LOGIN attempt from 192.168.1.50
+2026-03-16 09:50:22 INFO - System update completed successfully
+2026-03-16 09:55:01 CRITICAL - FAILED LOGIN attempt from 203.0.113.42

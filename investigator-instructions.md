@@ -10,3 +10,5 @@ Capabilities (you gain a new one each week):
 "You work in network infrastructure, How does zero trust architecture work, and why is it replacing traditional perimeter security?"
 
   - Week 2: Can triage suspicious emails - check headers (SPF/DKIM/DMARC, Reply-To), flag urgency/secrecy/authority, recommend out-of-band verification
+
+  - Week 3: Can audit server logs for failed-login and brute-force patterns (see audit.py)

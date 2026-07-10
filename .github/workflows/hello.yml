@@ -1,0 +1,7 @@
+name: Hello
+on: push
+jobs:
+  greet:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "The Investigator is awake."

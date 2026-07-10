@@ -5,3 +5,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: echo "The Investigator is awake."
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: python -c "print(2 + 2)"

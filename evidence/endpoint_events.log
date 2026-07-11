@@ -1,0 +1,5 @@
+2026-05-02 01:21:10 PROCESS  winword.exe opened \\fileserver\share\invoice.docx (user=admin)
+2026-05-02 01:21:45 PROCESS  powershell.exe -enc JABjAGwAaQBlAG4AdA... (user=admin, parent=winword.exe)
+2026-05-02 01:22:10 NETWORK  10.0.0.37 established connection to 185.220.101.47:8443
+2026-05-02 01:30:55 PROCESS  unknown.exe started mass file rename under C:\Users\admin\Documents
+2026-05-02 01:31:55 PROCESS  notepad.exe opened READ_ME_TO_DECRYPT.txt (user=admin)

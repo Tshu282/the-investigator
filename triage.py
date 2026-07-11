@@ -12,15 +12,23 @@ SYSTEM_PROMPT = """You are a senior SOC analyst. Analyze the provided evidence l
 and incident-response runbook. Produce a Markdown incident report with these
 sections:
 
-1. Summary
+1. Summary — include an overall confidence (High / Medium / Low) and a one-line confidence note
 2. Timeline
-3. Root Cause
-4. MITRE ATT&CK Mapping — for each finding include tactic, technique name, and technique ID
+3. Root Cause — include a confidence note (High / Medium / Low) explaining why
+4. MITRE ATT&CK Mapping — for each finding include:
+   - tactic
+   - technique name
+   - technique ID
+   - confidence (High / Medium / Low)
+   - a short confidence note (what evidence supports it, or what is missing)
 5. Runbook Steps — which steps were completed vs. missed
-6. Recommended Next Actions
+6. Uncertainties & Flags — list anything you are unsure about, gaps in evidence,
+   conflicting timestamps, or conclusions that need human verification.
+   Prefix each item with **FLAG:**
+7. Recommended Next Actions
 
-Be precise. Base conclusions only on the evidence. If something is unclear, say so.
-Do not invent facts."""
+Be precise. Base conclusions only on the evidence. If something is unclear, say so
+and put it under Uncertainties & Flags. Do not invent facts."""
 
 # Step 1: Read every log file in the evidence/ folder
 evidence_parts = []

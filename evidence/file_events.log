@@ -1,0 +1,5 @@
+2026-05-02 01:22:03 CREATE  \\fileserver\share\invoice.docx
+2026-05-02 01:31:40 RENAME  report.xlsx -> report.xlsx.locked
+2026-05-02 01:31:41 RENAME  budget.xlsx -> budget.xlsx.locked
+2026-05-02 01:31:42 RENAME  patients.db -> patients.db.locked
+2026-05-02 01:31:50 CREATE  READ_ME_TO_DECRYPT.txt

@@ -3,6 +3,7 @@ on:
   push:
     paths:
       - 'evidence/**'        # only fires when you add evidence
+  workflow_dispatch:         # allow manual run from Actions (uses latest YAML on the branch)
 
 permissions:
   contents: write           # lets the Action commit the report back
@@ -34,13 +35,23 @@ jobs:
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add reports/
-          # Skip cleanly when triage produced no new report files
           if git diff --staged --quiet; then
             echo "Nothing to commit"
             exit 0
           fi
           git commit -m "Auto-triage report"
-          # Rebase onto any commits that landed while this job was running
-          # (e.g. you pushing reports/ mid-run), then push
-          git pull --rebase origin "${{ github.ref_name }}"
-          git push origin "HEAD:${{ github.ref_name }}"
+
+          # Remote often moves during the long Ollama step — fetch/rebase/push with retries
+          for attempt in 1 2 3 4 5; do
+            git fetch origin "${{ github.ref_name }}"
+            if git rebase "origin/${{ github.ref_name }}" && \
+               git push origin "HEAD:${{ github.ref_name }}"; then
+              echo "Pushed report on attempt ${attempt}"
+              exit 0
+            fi
+            echo "Push rejected (attempt ${attempt}); retrying..."
+            git rebase --abort 2>/dev/null || true
+            sleep 3
+          done
+          echo "Failed to push report after retries"
+          exit 1

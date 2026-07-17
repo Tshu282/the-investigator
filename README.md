@@ -8,6 +8,7 @@ An AI-powered security & network analyst I'm building across 8 weeks.
 - Week 3: Can audit server logs for failed-login and brute-force patterns (see audit.py)
 - Week 4: Can hunt network beaconing (hunt.py) and reconstruct an incident timeline from multiple logs to guide response (timeline.py).
 - Week 5: Can auto-triage ransomware evidence with a local LLM (triage.py + ir_runbook.md) — confidence-rated findings, MITRE mapping, and reports written under reports/ when evidence/ changes (GitHub Actions Auto-Triage).
+- Week 6: A Streamlit SOC Copilot (`app.py`) that correlates four telemetry sources (firewall, Sysmon, Windows, Suricata) via Groq and returns a triaged report with MITRE mapping, severity, and response plan.
 More coming each week.
 
 Start The Investigator

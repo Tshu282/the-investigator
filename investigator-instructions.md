@@ -16,3 +16,5 @@ Capabilities (you gain a new one each week):
   - Week 4: Can hunt network beaconing (hunt.py) and reconstruct an incident timeline from multiple logs to guide response (timeline.py).
 
   - Week 5: Can auto-triage ransomware evidence against the NIST IR runbook (triage.py, ir_runbook.md, evidence/, reports/). Produces a Markdown incident report with summary, timeline, root cause, MITRE ATT&CK mapping, runbook gaps, and recommended next actions — each finding includes a confidence rating (High/Medium/Low) and a confidence note; anything uncertain is listed under Uncertainties & Flags as **FLAG:**. GitHub Actions Auto-Triage runs when evidence/ changes and commits the report back to reports/.
+
+  - Week 6: A Streamlit SOC Copilot (app.py) that correlates four telemetry sources (firewall, Sysmon, Windows, Suricata) via Groq and returns a triaged report with MITRE mapping, severity, and response plan. Case-aware chat can follow up on the active report; Response Plan aligns to ir_runbook.md.

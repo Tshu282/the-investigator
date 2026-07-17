@@ -1,0 +1,11 @@
+# Windows Security Event Log (Computer=WIN-FIN-07 unless noted)
+2026-06-11 09:30:05 EventID=4688 New Process Created
+NewProcessName=powershell.exe Account=ACME\jsmith
+2026-06-11 09:31:41 EventID=4720 A user account was created.
+TargetAccount=svc_backup SubjectAccount=ACME\jsmith
+2026-06-11 09:31:42 EventID=4732 Member added to a security-enabled local group.
+Group=Administrators Member=svc_backup
+2026-06-11 09:33:05 EventID=4624 Successful Logon Account=svc_backup
+LogonType=3 (Network) Computer=WIN-FILE-01 SourceWorkstation=WIN-FIN-07
+2026-06-11 09:33:20 EventID=4663 Access to object attempted Account=svc_backup
+Object=\\WIN-FILE-01\Finance\payroll_2026.xlsx Computer=WIN-FILE-01

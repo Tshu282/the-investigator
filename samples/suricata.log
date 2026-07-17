@@ -1,0 +1,10 @@
+# Suricata IDS alerts (fast.log format)
+06/11/2026-09:30:12 [**] [1:2027010:3] ET MALWARE Possible PowerShell Downloader
+Activity [**] [Classification: A Network Trojan was Detected] [Priority: 1] {TCP}
+45.137.21.130:80 -> 10.1.1.20:50877
+06/11/2026-09:31:48 [**] [1:2024897:5] ET TROJAN Observed Cobalt Strike Beacon
+Activity [**] [Classification: A Network Trojan was Detected] [Priority: 1] {TCP}
+10.1.1.20:50890 -> 45.137.21.130:8080
+06/11/2026-09:33:49 [**] [1:2024897:5] ET TROJAN Observed Cobalt Strike Beacon
+Activity [**] [Classification: A Network Trojan was Detected] [Priority: 1] {TCP}
+10.1.1.20:50937 -> 45.137.21.130:8080

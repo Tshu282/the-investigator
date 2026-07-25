@@ -1,0 +1,43 @@
+# Windows Security Event Log | Host: SRV-RDP-01 (10.1.1.30) | Exported: 2026-
+06-12
+# Internet-facing RDP jump host. Times in UTC.
+
+2026-06-12T01:02:11Z EventID=4624 Host=SRV-RDP-01 Account=hadmin
+Source=10.1.1.5 LogonType=10 Status=SUCCESS Msg="Logon (RemoteInteractive) -
+scheduled maintenance window"
+2026-06-12T01:58:44Z EventID=4634 Host=SRV-RDP-01 Account=hadmin
+Source=10.1.1.5 Status=INFO Msg="Account logged off"
+
+2026-06-12T02:14:07Z EventID=4625 Host=SRV-RDP-01 Account=administrator
+Source=91.219.236.18 LogonType=10 Status=FAILED Msg="Unknown user name or bad
+password"
+2026-06-12T02:14:09Z EventID=4625 Host=SRV-RDP-01 Account=administrator
+Source=91.219.236.18 LogonType=10 Status=FAILED Msg="Unknown user name or bad
+password"
+2026-06-12T02:14:12Z EventID=4625 Host=SRV-RDP-01 Account=administrator
+Source=91.219.236.18 LogonType=10 Status=FAILED Msg="Unknown user name or bad
+password"
+# ... 412 EventID=4625 (failed logon) entries for Account=administrator from
+Source=91.219.236.18 between 02:14:07Z and 02:51:30Z ...
+2026-06-12T02:51:33Z EventID=4624 Host=SRV-RDP-01 Account=administrator
+Source=91.219.236.18 LogonType=10 Status=SUCCESS Msg="An account was successfully
+logged on (RemoteInteractive)"
+
+2026-06-12T02:53:01Z EventID=4720 Host=SRV-RDP-01 Account=svc_update
+CreatedBy=administrator Status=SUCCESS Msg="A user account was created"
+2026-06-12T02:53:04Z EventID=4732 Host=SRV-RDP-01 Member=svc_update
+Group=Administrators Status=SUCCESS Msg="A member was added to a
+security-enabled local group"
+
+2026-06-12T02:55:18Z EventID=4688 Host=SRV-RDP-01 Account=administrator
+NewProcess="powershell.exe" CommandLine="Set-MpPreference
+-DisableRealtimeMonitoring $true" Msg="A new process has been created"
+2026-06-12T02:56:40Z EventID=1102 Host=SRV-RDP-01 Account=administrator
+Status=SUCCESS Msg="The audit log was cleared"
+
+2026-06-12T03:07:55Z EventID=4688 Host=SRV-RDP-01 Account=svc_update
+NewProcess="powershell.exe" CommandLine="Compress-Archive -Path C:\Finance\*
+-DestinationPath C:\Windows\Temp\fin.zip" Msg="A new process has been created"
+2026-06-12T03:12:20Z EventID=5156 Host=SRV-RDP-01 Account=svc_update
+Dest=91.219.236.18:443 Proto=TCP BytesOut=1216184320 Msg="Outbound connection
+allowed (~1.2 GB transferred)"

@@ -105,8 +105,8 @@ def reset_case():
     st.session_state.uploader_key = st.session_state.get("uploader_key", 0) + 1
 
 
-st.set_page_config(page_title="The Investigator v1.1 — SOC Copilot", page_icon="🕵️")
-st.title("🕵️ The Investigator v1.1 — SOC Copilot")
+st.set_page_config(page_title="The Investigator v1.2 — SOC Copilot", page_icon="🕵️")
+st.title("🕵️ The Investigator v1.2 — SOC Copilot")
 st.caption(
     "Correlate logs into one verdict, ask follow-ups about the active case, "
     "and browse saved reports under Case Files."

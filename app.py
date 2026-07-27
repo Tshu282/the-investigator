@@ -93,14 +93,22 @@ def chat_system_prompt(report: str | None) -> str:
             f"--- ACTIVE CASE REPORT ---\n{report}"
         )
     return (
-        f"{base} No correlation report is loaded yet — suggest the analyst run "
-        f"Correlate & Triage first if the question is case-specific."
+        f"{base} No active case report is loaded yet — suggest Correlate & Triage "
+        f"or load a report from Case Files if the question is case-specific."
     )
+
+
+def active_case_label() -> str | None:
+    if not st.session_state.get("report"):
+        return None
+    name = st.session_state.get("active_case_file")
+    return name if name else "Live correlation (Tab 1)"
 
 
 def reset_case():
     st.session_state.pop("report", None)
     st.session_state.pop("report_path", None)
+    st.session_state.pop("active_case_file", None)
     st.session_state.chat = []
     st.session_state.uploader_key = st.session_state.get("uploader_key", 0) + 1
 
@@ -108,8 +116,8 @@ def reset_case():
 st.set_page_config(page_title="The Investigator v1.2 — SOC Copilot", page_icon="🕵️")
 st.title("🕵️ The Investigator v1.2 — SOC Copilot")
 st.caption(
-    "Correlate logs into one verdict, ask follow-ups about the active case, "
-    "and browse saved reports under Case Files."
+    "Correlate logs into one verdict, load a saved Case File as the active case, "
+    "then ask follow-ups under Ask the Investigator."
 )
 
 if "uploader_key" not in st.session_state:
@@ -153,11 +161,13 @@ with tab1:
                     {"role": "user", "content": user_content},
                 ])
             st.session_state.report = report
+            st.session_state.active_case_file = None
             st.session_state.pop("report_path", None)
             if report and not report.startswith("⚠️"):
                 saved = save_report(report)
                 if isinstance(saved, Path):
                     st.session_state.report_path = str(saved)
+                    st.session_state.active_case_file = saved.name
                 else:
                     st.warning(
                         f"Could not save to `{REPORTS_DIR}/` ({saved}). "
@@ -183,10 +193,14 @@ with tab1:
 # ---------------------------------------------------------------------------
 with tab2:
     st.subheader("Ask the Investigator")
-    if st.session_state.get("report"):
-        st.caption("Active case report is loaded into this chat.")
+    label = active_case_label()
+    if label:
+        st.caption(f"Active case loaded into this chat: `{label}`")
     else:
-        st.caption("No active report yet — run Correlate & Triage for case-specific answers.")
+        st.caption(
+            "No active report yet — run Correlate & Triage, or open Case Files "
+            "and click “Use as active case for chat.”"
+        )
 
     if st.button("Clear chat"):
         st.session_state.chat = []
@@ -214,6 +228,7 @@ with tab3:
     st.subheader("Case Files")
     st.caption(
         f"Markdown reports from `{REPORTS_DIR}/`, newest modified first. "
+        "Load one as the active case so Ask the Investigator can use it. "
         "On a public Cloud URL this folder is shared and may not persist — "
         "use Download for a private copy of a live correlation."
     )
@@ -223,6 +238,16 @@ with tab3:
     if not md_files:
         st.info("No case files yet. Reports saved to `reports/` will appear here.")
     else:
-        choice = st.selectbox("Pick a case file", md_files)
+        choice = st.selectbox("Pick a case file", md_files, key="case_file_choice")
         path = REPORTS_DIR / choice
-        st.markdown(path.read_text(encoding="utf-8"))
+        content = path.read_text(encoding="utf-8")
+
+        if st.session_state.get("active_case_file") == choice:
+            st.success(f"`{choice}` is the active case for Ask the Investigator.")
+        if st.button("Use as active case for chat"):
+            st.session_state.report = content
+            st.session_state.active_case_file = choice
+            st.session_state.report_path = str(path)
+            st.rerun()
+
+        st.markdown(content)

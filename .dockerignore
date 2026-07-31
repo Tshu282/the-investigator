@@ -1,0 +1,5 @@
+.git
+.streamlit
+__pycache__/
+*.pyc
+.env

@@ -1,9 +1,11 @@
 """
-The Investigator — SOC Copilot (Week 7)
+The Investigator — SOC Copilot (Week 8)
 A Streamlit app that correlates multiple log sources into one verdict using a
-hosted LLM (Groq / Llama 3.3 70B), and surfaces saved reports in a Case Files tab.
+hosted LLM (Groq / Llama 3.3 70B), surfaces saved reports in a Case Files tab,
+and can investigate the evidence/ folder autonomously with a tool-calling agent.
 """
 
+import json
 from datetime import datetime
 from pathlib import Path
 
@@ -12,6 +14,7 @@ from groq import Groq
 
 REPORTS_DIR = Path("reports")
 RUNBOOK_PATH = Path("ir_runbook.md")
+EVIDENCE_DIR = Path("evidence")
 MODEL = "llama-3.3-70b-versatile"
 
 CORRELATION_SYSTEM_PROMPT = """You are a senior SOC analyst. You are given one or
@@ -113,6 +116,127 @@ def reset_case():
     st.session_state.uploader_key = st.session_state.get("uploader_key", 0) + 1
 
 
+# ===========================================================================
+# AGENT MACHINERY — the same loop, tools, and schema as the CLI agent
+# (agent.py). Only the edges differ: the key comes from st.secrets and the
+# trail is written to the page instead of the terminal. An agent is the loop,
+# not the interface.
+# ===========================================================================
+MITRE = {
+    "T1110": "Brute Force — guessing credentials through many login attempts.",
+    "T1078": "Valid Accounts — abusing existing legitimate credentials.",
+    "T1136": "Create Account — creating a new account for persistence.",
+    "T1021": "Remote Services — moving laterally using remote access (RDP/SMB).",
+    "T1059": "Command and Scripting Interpreter — running commands via a shell.",
+    "T1071": "Application Layer Protocol — C2 traffic over common protocols.",
+    "T1105": "Ingress Tool Transfer — downloading tools/payloads onto a host.",
+    "T1486": "Data Encrypted for Impact — ransomware encrypting files.",
+    "T1562": "Impair Defenses — disabling security tools (e.g., antivirus).",
+    "T1070": "Indicator Removal — clearing logs to hide activity.",
+    "T1560": "Archive Collected Data — staging/compressing data before exfil.",
+    "T1048": "Exfiltration Over Alternative Protocol — sending data to an attacker.",
+}
+
+AGENT_SYSTEM = """You are an autonomous SOC analyst. Investigate the incident in the
+evidence/ folder using the tools available to you. Decide for yourself which logs
+to read and which technique IDs to verify. When you have enough to be sure, stop
+calling tools and write a final report with: what happened (the attack chain in
+order), the hosts/accounts/IPs involved, a MITRE ATT&CK mapping (tactic, technique
+name, ID), and a severity (Low/Medium/High/Critical). Only cite evidence you have
+actually read. Do not invent log lines or technique IDs."""
+
+
+def list_evidence():
+    if not EVIDENCE_DIR.is_dir():
+        return "No evidence/ folder found."
+    files = sorted(
+        p.name for p in EVIDENCE_DIR.iterdir()
+        if p.is_file() and p.suffix in (".log", ".txt")
+    )
+    return "\n".join(files) if files else "evidence/ is empty."
+
+
+def read_log(filename):
+    # Path(...).name strips any directory part, so the agent cannot read outside evidence/.
+    path = EVIDENCE_DIR / Path(filename).name
+    if not path.is_file():
+        return f"No such file: {filename}"
+    return path.read_text(encoding="utf-8", errors="ignore")
+
+
+def lookup_mitre(technique_id):
+    key = technique_id.upper().strip()
+    return MITRE.get(key, f"{key}: not in local reference — verify at attack.mitre.org")
+
+
+# The schema is all the model sees — never the Python above. These names,
+# descriptions, and argument shapes are how it knows what it may call.
+TOOLS = [
+    {"type": "function", "function": {
+        "name": "list_evidence",
+        "description": "List the log files available in the evidence/ folder.",
+        "parameters": {"type": "object", "properties": {}},
+    }},
+    {"type": "function", "function": {
+        "name": "read_log",
+        "description": "Read the full contents of one evidence log file.",
+        "parameters": {"type": "object",
+            "properties": {"filename": {"type": "string", "description": "The log file name, e.g. auth_events.log"}},
+            "required": ["filename"]},
+    }},
+    {"type": "function", "function": {
+        "name": "lookup_mitre",
+        "description": "Look up what a MITRE ATT&CK technique ID means, e.g. T1110.",
+        "parameters": {"type": "object",
+            "properties": {"technique_id": {"type": "string", "description": "A technique ID like T1059."}},
+            "required": ["technique_id"]},
+    }},
+]
+
+AVAILABLE = {"list_evidence": list_evidence, "read_log": read_log, "lookup_mitre": lookup_mitre}
+
+
+def run_agent(goal, max_steps=10):
+    """The loop from agent.py, writing its trail to the page instead of the terminal."""
+    try:
+        client = Groq(api_key=st.secrets["GROQ_API_KEY"])
+    except KeyError:
+        return "⚠️ No GROQ_API_KEY found. Add it to `.streamlit/secrets.toml` or your app's Secrets."
+
+    messages = [{"role": "system", "content": AGENT_SYSTEM},
+                {"role": "user", "content": goal}]
+
+    for step in range(max_steps):        # bound the loop — never let an agent run forever
+        try:
+            resp = client.chat.completions.create(
+                model=MODEL, messages=messages, tools=TOOLS, tool_choice="auto")
+        except Exception as e:
+            return f"⚠️ Groq request failed: {e}"
+
+        msg = resp.choices[0].message
+        messages.append(msg)
+
+        if msg.content:                  # the agent's own narration, if any
+            st.markdown(f"💭 {msg.content.strip()}")
+
+        if not msg.tool_calls:           # no tool wanted => this is the final verdict
+            return msg.content or "_(no verdict text)_"
+
+        for tc in msg.tool_calls:        # the agent CHOSE these — show the trail
+            name = tc.function.name
+            args = json.loads(tc.function.arguments or "{}") or {}
+            st.write(f"🔧 **step {step + 1}** · `{name}({args})`")
+            result = AVAILABLE[name](**args)
+            preview = str(result).replace("\n", " ")
+            if len(preview) > 100:
+                preview = preview[:100] + "…"
+            st.caption(f"↳ {preview}")
+            messages.append({"role": "tool", "tool_call_id": tc.id,
+                             "name": name, "content": str(result)})
+
+    return "_(stopped: hit the step limit without a verdict)_"
+
+
 st.set_page_config(page_title="The Investigator v1.2 — SOC Copilot", page_icon="🕵️")
 st.title("🕵️ The Investigator v1.2 — SOC Copilot")
 st.caption(
@@ -125,8 +249,8 @@ if "uploader_key" not in st.session_state:
 if "chat" not in st.session_state:
     st.session_state.chat = []
 
-tab1, tab2, tab3 = st.tabs(
-    ["Correlate & Triage", "Ask the Investigator", "Case Files"]
+tab1, tab2, tab3, tab4 = st.tabs(
+    ["Correlate & Triage", "Ask the Investigator", "Case Files", "Autonomous Investigation"]
 )
 
 # ---------------------------------------------------------------------------
@@ -251,3 +375,39 @@ with tab3:
             st.rerun()
 
         st.markdown(content)
+
+# ---------------------------------------------------------------------------
+# TAB 4 — Autonomous Investigation (the agent, in the browser)
+# ---------------------------------------------------------------------------
+with tab4:
+    st.subheader("Autonomous Investigation")
+    st.caption(
+        "Hand the Investigator a goal and watch it choose its own steps — then audit the trail."
+    )
+    st.write(
+        f"It investigates the logs already in your **`{EVIDENCE_DIR}/`** folder, deciding for "
+        "itself which to read and which techniques to verify. Read the trail, then check the verdict."
+    )
+
+    goal = st.text_input(
+        "Goal",
+        value="Investigate the incident in the evidence/ folder and report what happened.",
+    )
+
+    if st.button("🕵️ Run autonomous investigation"):
+        with st.status("The Investigator is working…", expanded=True):
+            verdict = run_agent(goal)
+        st.session_state.verdict = verdict
+
+    if st.session_state.get("verdict"):
+        st.markdown("### Verdict")
+        st.markdown(st.session_state.verdict)
+        st.caption(
+            "Supervise it: did it read every relevant log, verify its MITRE IDs, and invent nothing?"
+        )
+        stamp = datetime.now().strftime("%Y-%m-%d_%H%M")
+        st.download_button(
+            "⬇️ Download verdict",
+            st.session_state.verdict,
+            file_name=f"autonomous_verdict_{stamp}.md",
+        )

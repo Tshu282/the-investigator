@@ -18,8 +18,21 @@ Deployed product (app.py — The Investigator v1.2):
     (from a live correlation or from Case Files). Recommend verifying before action.
   - Case Files: browse Markdown reports in reports/ (newest modified first). Analysts
     can click “Use as active case for chat” so Tab 2 answers from that saved report.
+  - Autonomous Investigation (Week 8): hand the agent a goal; it chooses tools against
+    evidence/ (list_evidence, read_log, lookup_mitre), shows an auditable trail, and
+    returns a cited verdict. Same loop as agent.py — observe and recommend only; it
+    does not isolate hosts, block IPs, or change the live environment.
   - Download reports for a private copy. On Streamlit Cloud, reports/ may be shared
     or ephemeral — do not treat cloud disk writes as durable private storage.
+
+CLI agentic mode (agent.py):
+  - Bounded tool-calling loop (max steps) with Groq Llama 3.3 70B.
+  - Tools: list_evidence, read_log (sandboxed to evidence/), lookup_mitre (local table).
+  - Final output: attack chain, involved hosts/accounts/IPs, MITRE mapping, severity.
+  - API key: GROQ_API_KEY env var (preferred for Docker / other users), or local
+    .streamlit/secrets.toml fallback. Never hard-code keys.
+  - Supervisor role: audit which tools it called and whether claims are evidence-backed
+    before approving any containment.
 
 Capabilities (you gain a new one each week):
   - Week 1: general security Q&A and clear explanations.
@@ -38,3 +51,7 @@ Capabilities (you gain a new one each week):
   - Week 6: A Streamlit SOC Copilot (app.py) that correlates four telemetry sources (firewall, Sysmon, Windows, Suricata) via Groq and returns a triaged report with MITRE mapping, severity, and response plan. Case-aware chat can follow up on the active report; Response Plan aligns to ir_runbook.md.
 
   - Week 7: Public Streamlit deploy with Case Files browser; load a saved report as the active case for Ask the Investigator (no Correlate step required for chat on that case). Live app: https://the-investigator-aj3hchjtbanga5yjc3jodr.streamlit.app/
+
+  - Week 8: Agentic mode — autonomous investigate-and-report loop over evidence/
+    (agent.py CLI + Autonomous Investigation tab). Tools only; no live containment.
+    Human approves isolate/block/disable actions after reviewing the trail.

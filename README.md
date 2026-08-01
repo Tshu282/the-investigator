@@ -4,7 +4,8 @@ An AI-powered security analyst that correlates logs into MITRE-mapped incident
 reports and runs an autonomous investigation agent.
 
 🔗 **Live app:** [https://the-investigator-aj3hchjtbanga5yjc3jodr.streamlit.app/](https://the-investigator-aj3hchjtbanga5yjc3jodr.streamlit.app/)  
-📦 **Docker image:** `docker pull trshuler1/investigator-agent:1.0`
+📦 **Docker image:** `docker pull trshuler1/investigator-agent:1.2`  
+_(older CLI image still available as `:1.0`)_
 
 <table>
   <tr>
@@ -63,12 +64,14 @@ python agent.py
 
 **Docker (CLI agent)**
 ```bash
-docker pull trshuler1/investigator-agent:1.0
-docker run --rm -e GROQ_API_KEY=gsk_... trshuler1/investigator-agent:1.0
+docker pull trshuler1/investigator-agent:1.2
+docker run --rm -e GROQ_API_KEY=gsk_... trshuler1/investigator-agent:1.2
+
+# Older image (pre–v1.2 hardening): trshuler1/investigator-agent:1.0
 
 # Or build from this repo:
-# docker build -t investigator-agent .
-# docker run --rm -e GROQ_API_KEY=gsk_... investigator-agent
+# docker build -t investigator-agent:1.2 .
+# docker run --rm -e GROQ_API_KEY=gsk_... investigator-agent:1.2
 ```
 
 **Pre-pass only / accuracy check (no API key)**

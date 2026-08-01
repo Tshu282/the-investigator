@@ -1,57 +1,97 @@
 """
-The Investigator — SOC Copilot (Week 8)
-A Streamlit app that correlates multiple log sources into one verdict using a
-hosted LLM (Groq / Llama 3.3 70B), surfaces saved reports in a Case Files tab,
-and can investigate the evidence/ folder autonomously with a tool-calling agent.
+The Investigator — SOC Copilot (v1.2)
+Correlates multiple log sources into one verdict using Groq (Llama 3.3 70B),
+with a deterministic pre-pass before the LLM, Case Files, and an autonomous
+tool-calling agent over evidence/.
 """
 
+from __future__ import annotations
+
 import json
+import os
+import re
 from datetime import datetime
 from pathlib import Path
 
 import streamlit as st
 from groq import Groq
 
+from prepass import case_metadata_footer, hash_evidence, run_prepass, run_prepass_on_dir
+
 REPORTS_DIR = Path("reports")
 RUNBOOK_PATH = Path("ir_runbook.md")
 EVIDENCE_DIR = Path("evidence")
+SECRETS_PATH = Path(".streamlit/secrets.toml")
 MODEL = "llama-3.3-70b-versatile"
 
-CORRELATION_SYSTEM_PROMPT = """You are a senior SOC analyst. You are given one or
-more raw log files from a single environment, plus an incident-response runbook.
-Correlate the logs into ONE incident and produce a Markdown report with these
-exact sections:
+CORRELATION_SYSTEM_PROMPT = """You are a senior SOC analyst. You are given raw log
+files, an incident-response runbook, and a DETERMINISTIC PRE-PASS summary produced
+by code (not by you). Correlate into ONE incident and produce a Markdown report
+with these exact sections:
 
 ## 1. Threat Analysis
 What happened, the attack chain in order, and the hosts, accounts, and IPs involved.
+Cite concrete log lines or pre-pass facts for each major claim.
 
 ## 2. MITRE ATT&CK Mapping
-For each finding: tactic, technique name, and technique ID (e.g., T1059).
+For each finding include: tactic, technique name, technique ID (e.g., T1059),
+confidence (High / Medium / Low), and a one-line confidence note.
+Do not invent technique IDs that are not supported by the logs or pre-pass.
 
 ## 3. Severity
 One of Low / Medium / High / Critical, with a one-line justification.
+Assign Critical ONLY if at least two independent sources support meaningful impact
+(e.g. encryption/ransom + successful auth, or pre-pass brute-force flag + confirmed
+compromise). Otherwise cap at High and add a **FLAG:** explaining why Critical
+was not assigned.
 
 ## 4. Investigation Plan
 Concrete next steps to confirm scope.
 
 ## 5. Response Plan
-Containment, eradication, and recovery steps aligned with the provided runbook phases.
+Containment, eradication, and recovery steps aligned with the runbook.
+Prefix every disruptive step with **RECOMMEND — verify before action:**
+(isolate host, block IP, disable account, etc.). Never imply automated containment.
 
 ## 6. Uncertainties & Flags
-List anything you are unsure about, gaps in evidence, conflicting timestamps, or
-conclusions that need human verification. Prefix each item with **FLAG:**
+Gaps, conflicts, thin evidence, or conclusions that need human verification.
+Prefix each item with **FLAG:**
+Reconcile with the deterministic pre-pass: if you disagree with a pre-pass fact,
+explain why under Flags — do not silently ignore it.
 
-Cite the specific log evidence for each claim. If something is uncertain, say so —
-do not invent technique IDs or events that are not present in the logs."""
+Cite specific log evidence or pre-pass bullets for each claim. If uncertain, say so."""
+
+
+def get_groq_api_key() -> str | None:
+    """Prefer env var (Cloud / Docker / CLI); fall back to local secrets.toml."""
+    key = (os.environ.get("GROQ_API_KEY") or "").strip()
+    if key and key.lower() not in {"your_key_here", "gsk_...", "changeme"}:
+        return key
+    try:
+        return st.secrets["GROQ_API_KEY"]
+    except Exception:
+        pass
+    if SECRETS_PATH.is_file():
+        match = re.search(
+            r'GROQ_API_KEY\s*=\s*["\']([^"\']+)["\']',
+            SECRETS_PATH.read_text(encoding="utf-8"),
+        )
+        if match:
+            return match.group(1).strip()
+    return None
 
 
 def ask_groq(messages):
+    api_key = get_groq_api_key()
+    if not api_key:
+        return (
+            "⚠️ No GROQ_API_KEY found. Set it in Streamlit Cloud Secrets, "
+            "export GROQ_API_KEY, or add it to local `.streamlit/secrets.toml`."
+        )
     try:
-        client = Groq(api_key=st.secrets["GROQ_API_KEY"])
+        client = Groq(api_key=api_key)
         resp = client.chat.completions.create(model=MODEL, messages=messages)
         return resp.choices[0].message.content
-    except KeyError:
-        return "⚠️ No GROQ_API_KEY found. Add it to .streamlit/secrets.toml and rerun."
     except Exception as e:
         return f"⚠️ Groq request failed: {e}"
 
@@ -86,7 +126,7 @@ def list_case_files():
 def chat_system_prompt(report: str | None) -> str:
     base = (
         "You are a senior SOC analyst helping a colleague. Be concise and precise. "
-        "Do not invent facts."
+        "Do not invent facts. Recommend verifying before any containment action."
     )
     if report:
         return (
@@ -112,15 +152,13 @@ def reset_case():
     st.session_state.pop("report", None)
     st.session_state.pop("report_path", None)
     st.session_state.pop("active_case_file", None)
+    st.session_state.pop("prepass", None)
     st.session_state.chat = []
     st.session_state.uploader_key = st.session_state.get("uploader_key", 0) + 1
 
 
 # ===========================================================================
-# AGENT MACHINERY — the same loop, tools, and schema as the CLI agent
-# (agent.py). Only the edges differ: the key comes from st.secrets and the
-# trail is written to the page instead of the terminal. An agent is the loop,
-# not the interface.
+# AGENT MACHINERY — same loop as agent.py; trail renders in the UI.
 # ===========================================================================
 MITRE = {
     "T1110": "Brute Force — guessing credentials through many login attempts.",
@@ -138,12 +176,13 @@ MITRE = {
 }
 
 AGENT_SYSTEM = """You are an autonomous SOC analyst. Investigate the incident in the
-evidence/ folder using the tools available to you. Decide for yourself which logs
-to read and which technique IDs to verify. When you have enough to be sure, stop
-calling tools and write a final report with: what happened (the attack chain in
-order), the hosts/accounts/IPs involved, a MITRE ATT&CK mapping (tactic, technique
-name, ID), and a severity (Low/Medium/High/Critical). Only cite evidence you have
-actually read. Do not invent log lines or technique IDs."""
+evidence/ folder using the tools available to you. Prefer calling run_prepass early
+for deterministic facts, then decide which logs to read and which technique IDs to
+verify. When you have enough to be sure, stop calling tools and write a final report
+with: attack chain, hosts/accounts/IPs, MITRE mapping (with confidence High/Medium/Low
+per finding), and severity (Critical only with multi-source support). Only cite
+evidence you have actually read. Label containment as recommendations to verify
+before action. Do not invent log lines or technique IDs."""
 
 
 def list_evidence():
@@ -157,7 +196,6 @@ def list_evidence():
 
 
 def read_log(filename):
-    # Path(...).name strips any directory part, so the agent cannot read outside evidence/.
     path = EVIDENCE_DIR / Path(filename).name
     if not path.is_file():
         return f"No such file: {filename}"
@@ -169,8 +207,10 @@ def lookup_mitre(technique_id):
     return MITRE.get(key, f"{key}: not in local reference — verify at attack.mitre.org")
 
 
-# The schema is all the model sees — never the Python above. These names,
-# descriptions, and argument shapes are how it knows what it may call.
+def tool_run_prepass():
+    return run_prepass_on_dir(EVIDENCE_DIR)
+
+
 TOOLS = [
     {"type": "function", "function": {
         "name": "list_evidence",
@@ -191,22 +231,36 @@ TOOLS = [
             "properties": {"technique_id": {"type": "string", "description": "A technique ID like T1059."}},
             "required": ["technique_id"]},
     }},
+    {"type": "function", "function": {
+        "name": "run_prepass",
+        "description": "Run deterministic failed-login, beaconing, and timeline checks on evidence/.",
+        "parameters": {"type": "object", "properties": {}},
+    }},
 ]
 
-AVAILABLE = {"list_evidence": list_evidence, "read_log": read_log, "lookup_mitre": lookup_mitre}
+AVAILABLE = {
+    "list_evidence": list_evidence,
+    "read_log": read_log,
+    "lookup_mitre": lookup_mitre,
+    "run_prepass": tool_run_prepass,
+}
 
 
 def run_agent(goal, max_steps=10):
     """The loop from agent.py, writing its trail to the page instead of the terminal."""
-    try:
-        client = Groq(api_key=st.secrets["GROQ_API_KEY"])
-    except KeyError:
-        return "⚠️ No GROQ_API_KEY found. Add it to `.streamlit/secrets.toml` or your app's Secrets."
+    api_key = get_groq_api_key()
+    if not api_key:
+        return (
+            "⚠️ No GROQ_API_KEY found. Set Streamlit Cloud Secrets, export "
+            "GROQ_API_KEY, or use local `.streamlit/secrets.toml`."
+        )
 
+    client = Groq(api_key=api_key)
     messages = [{"role": "system", "content": AGENT_SYSTEM},
                 {"role": "user", "content": goal}]
+    trail: list[str] = []
 
-    for step in range(max_steps):        # bound the loop — never let an agent run forever
+    for step in range(max_steps):
         try:
             resp = client.chat.completions.create(
                 model=MODEL, messages=messages, tools=TOOLS, tool_choice="auto")
@@ -216,21 +270,31 @@ def run_agent(goal, max_steps=10):
         msg = resp.choices[0].message
         messages.append(msg)
 
-        if msg.content:                  # the agent's own narration, if any
+        if msg.content:
             st.markdown(f"💭 {msg.content.strip()}")
 
-        if not msg.tool_calls:           # no tool wanted => this is the final verdict
-            return msg.content or "_(no verdict text)_"
+        if not msg.tool_calls:
+            verdict = msg.content or "_(no verdict text)_"
+            if trail:
+                verdict += "\n\n---\n\n## Agent trail\n\n" + "\n".join(f"- {t}" for t in trail)
+            return verdict
 
-        for tc in msg.tool_calls:        # the agent CHOSE these — show the trail
+        for tc in msg.tool_calls:
             name = tc.function.name
             args = json.loads(tc.function.arguments or "{}") or {}
             st.write(f"🔧 **step {step + 1}** · `{name}({args})`")
-            result = AVAILABLE[name](**args)
+            if name not in AVAILABLE:
+                result = f"Unknown tool: {name}"
+            else:
+                try:
+                    result = AVAILABLE[name](**args)
+                except TypeError as e:
+                    result = f"Bad arguments for {name}: {e}"
             preview = str(result).replace("\n", " ")
             if len(preview) > 100:
                 preview = preview[:100] + "…"
             st.caption(f"↳ {preview}")
+            trail.append(f"step {step + 1}: `{name}({args})` → {preview}")
             messages.append({"role": "tool", "tool_call_id": tc.id,
                              "name": name, "content": str(result)})
 
@@ -240,8 +304,8 @@ def run_agent(goal, max_steps=10):
 st.set_page_config(page_title="The Investigator v1.2 — SOC Copilot", page_icon="🕵️")
 st.title("🕵️ The Investigator v1.2 — SOC Copilot")
 st.caption(
-    "Correlate logs into one verdict, load a saved Case File as the active case, "
-    "then ask follow-ups under Ask the Investigator."
+    "Deterministic pre-pass, then LLM correlation — load a Case File, ask follow-ups, "
+    "or run Autonomous Investigation. Containment is recommend-only."
 )
 
 if "uploader_key" not in st.session_state:
@@ -258,7 +322,10 @@ tab1, tab2, tab3, tab4 = st.tabs(
 # ---------------------------------------------------------------------------
 with tab1:
     st.subheader("Correlate & Triage")
-    st.caption("Upload one or more logs. The Copilot correlates them into a single verdict.")
+    st.caption(
+        "Upload one or more logs. A deterministic pre-pass runs first; then the "
+        "Copilot correlates into a single verdict that must reconcile with those facts."
+    )
 
     uploaded = st.file_uploader(
         "Upload log files",
@@ -271,19 +338,36 @@ with tab1:
         if runbook is None:
             st.error("`ir_runbook.md` not found. Add it to the project root and try again.")
         else:
+            file_map: dict[str, str] = {}
             combined = ""
             for f in uploaded:
                 text = f.read().decode("utf-8", errors="ignore")
+                file_map[f.name] = text
                 combined += f"\n\n===== {f.name} =====\n{text}"
+
+            prepass_md = run_prepass(file_map)
+            overall_hash, _ = hash_evidence(file_map)
+            st.session_state.prepass = prepass_md
+
             user_content = (
                 f"## Incident-response runbook\n\n{runbook}\n\n"
+                f"{prepass_md}\n\n"
                 f"## Evidence logs\n{combined}"
             )
-            with st.spinner("Correlating across sources..."):
+            with st.spinner("Running pre-pass, then correlating across sources..."):
                 report = ask_groq([
                     {"role": "system", "content": CORRELATION_SYSTEM_PROMPT},
                     {"role": "user", "content": user_content},
                 ])
+
+            if report and not report.startswith("⚠️"):
+                report = report + case_metadata_footer(
+                    model=MODEL,
+                    file_names=sorted(file_map),
+                    evidence_sha256=overall_hash,
+                    prepass_excerpt=prepass_md,
+                )
+
             st.session_state.report = report
             st.session_state.active_case_file = None
             st.session_state.pop("report_path", None)
@@ -297,6 +381,10 @@ with tab1:
                         f"Could not save to `{REPORTS_DIR}/` ({saved}). "
                         "Use Download — especially on a public Cloud deploy."
                     )
+
+    if st.session_state.get("prepass"):
+        with st.expander("Deterministic pre-pass (rule-based)", expanded=True):
+            st.markdown(st.session_state.prepass)
 
     if st.session_state.get("report"):
         st.markdown(st.session_state.report)
@@ -385,8 +473,9 @@ with tab4:
         "Hand the Investigator a goal and watch it choose its own steps — then audit the trail."
     )
     st.write(
-        f"It investigates the logs already in your **`{EVIDENCE_DIR}/`** folder, deciding for "
-        "itself which to read and which techniques to verify. Read the trail, then check the verdict."
+        f"It investigates the logs already in your **`{EVIDENCE_DIR}/`** folder "
+        "(list/read logs, MITRE lookup, deterministic `run_prepass`). "
+        "Read the trail, then check the verdict. Containment stays recommend-only."
     )
 
     goal = st.text_input(
@@ -403,7 +492,8 @@ with tab4:
         st.markdown("### Verdict")
         st.markdown(st.session_state.verdict)
         st.caption(
-            "Supervise it: did it read every relevant log, verify its MITRE IDs, and invent nothing?"
+            "Supervise it: did it run pre-pass or read every relevant log, verify "
+            "MITRE IDs, and invent nothing?"
         )
         stamp = datetime.now().strftime("%Y-%m-%d_%H%M")
         st.download_button(

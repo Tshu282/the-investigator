@@ -1,56 +1,82 @@
-# The Investigator
+# The Investigator — AI Security & Network Copilot
 
-An AI-powered security & network analyst I'm building across 8 weeks.
+An AI-powered security analyst that correlates logs into MITRE-mapped incident
+reports and runs an autonomous investigation agent.
 
-**Live app:** [https://the-investigator-aj3hchjtbanga5yjc3jodr.streamlit.app/](https://the-investigator-aj3hchjtbanga5yjc3jodr.streamlit.app/)
+🔗 **Live app:** [https://the-investigator-aj3hchjtbanga5yjc3jodr.streamlit.app/](https://the-investigator-aj3hchjtbanga5yjc3jodr.streamlit.app/)  
+📦 **Docker image:** `docker pull trshuler1/investigator-agent:1.0`
+
+![Correlate — deterministic pre-pass](docs/screenshot1.png)
+
+![Correlate — MITRE-mapped incident report](docs/screenshot2.png)
 
 ## What it does
-- Correlates uploaded logs (firewall, Sysmon, Windows, Suricata, and more) into one incident verdict via Groq
-- Returns a triage report with threat analysis, MITRE ATT&CK mapping, severity, investigation/response plans, and Uncertainties & Flags
-- Aligns response steps to `ir_runbook.md`
-- Case-aware chat (“Ask the Investigator”) grounded in the active report
-- Case Files browser for saved reports under `reports/` — load any file as the active case for chat
-- Automated pipeline triage when `evidence/` changes (GitHub Actions + local LLM)
-- **Agentic mode:** given a goal, an autonomous loop decides which evidence to read and which MITRE IDs to verify, then returns a cited verdict — observe and recommend only; it does not isolate hosts or block IPs
+- **Correlate & Triage** — upload logs; a deterministic pre-pass runs first, then Groq returns a MITRE-mapped incident report (confidence, severity gates, Flags, case metadata)
+- **Ask the Investigator** — case-aware chat grounded in the active report
+- **Case Files** — browse saved reports under `reports/` and load one as the active case
+- **Autonomous Investigation** — agent loop over `evidence/` (`list_evidence`, `read_log`, `lookup_mitre`, `run_prepass`) with an auditable trail — observe and recommend only
+- **Pipeline triage** — when `evidence/` changes, GitHub Actions + Ollama write a report under `reports/`
 
-## Skills so far
-- Week 1: Thinks like a security analyst (prompt library)
-- Week 2: Can triage suspicious emails - check headers (SPF/DKIM/DMARC, Reply-To), flag urgency/secrecy/authority, recommend out-of-band verification
-- Week 3: Can audit server logs for failed-login and brute-force patterns (see audit.py)
-- Week 4: Can hunt network beaconing (hunt.py) and reconstruct an incident timeline from multiple logs to guide response (timeline.py).
-- Week 5: Can auto-triage ransomware evidence with a local LLM (triage.py + ir_runbook.md) — confidence-rated findings, MITRE mapping, and reports written under reports/ when evidence/ changes (GitHub Actions Auto-Triage).
-- Week 6: A Streamlit SOC Copilot (`app.py`) that correlates four telemetry sources (firewall, Sysmon, Windows, Suricata) via Groq and returns a triaged report with MITRE mapping, severity, and response plan.
-- Week 7: Deployed SOC Copilot (v1.2) with Case Files tab, runbook-aware correlation, and chat that can use a live correlation or a saved case file as the active case.
-- Week 8: Agentic mode (`agent.py` CLI + Autonomous Investigation tab in `app.py`) — tool-calling loop over `evidence/` with `list_evidence`, `read_log`, and `lookup_mitre`; supervisor audits the trail before any containment.
+## Tech stack
+- Streamlit (Python), deployed on Streamlit Community Cloud
+- Groq (Llama 3.3 70B) for the web app and CLI agent
+- Ollama (local model) + GitHub Actions for the automated triage pipeline
+- Docker for the containerized CLI agent
+- MITRE ATT&CK for technique mapping
+- Deterministic pre-pass (`prepass.py`) for failed logins, beaconing hints, and timeline/dwell before the LLM
 
-## Agentic mode (Week 8)
+## What v1.2 hardened
+- Unverified LLM verdicts → pre-pass facts the model must reconcile; per-finding confidence; Critical only with multi-source support
+- Action risk → containment labeled **RECOMMEND — verify before action**
+- Weak provenance → evidence SHA-256 + pre-pass excerpt on saved reports; agent trail on autonomous verdicts
 
-The Investigator can run as an **agent**: you give it a goal, and a bounded loop asks the model what to do next. The model may call tools; your code runs them and feeds results back until the model stops and writes a final report (attack chain, hosts/accounts/IPs, MITRE mapping, severity).
-
-| Tool | Purpose |
-|------|---------|
-| `list_evidence` | List `.log` / `.txt` files under `evidence/` |
-| `read_log` | Read one evidence file (sandboxed to that folder) |
-| `lookup_mitre` | Resolve a technique ID against a small local MITRE table |
-
-**Interfaces**
-- **CLI:** `python agent.py` — colored trail in the terminal via `rich`
-- **Streamlit:** Tab 4 — Autonomous Investigation — same loop, trail on the page
-
-**API key (bring your own — never hard-coded)**
-- Prefer environment variable: `GROQ_API_KEY`
-- Local fallback: `.streamlit/secrets.toml` (gitignored)
-- Streamlit Cloud: set `GROQ_API_KEY` in the app’s Secrets
-
-**Human in the loop:** the agent may read and reason. Containment actions (isolate a host, block an IP, disable an account) always need a human; the agent only recommends.
+## Limits
+Lab / portfolio aid — not a SOC system of record. No SSO/RBAC, no SIEM/EDR integrations, logs may go to a third-party API (Groq), and Cloud `reports/` can be shared or ephemeral. Use **Download** for a private copy. Humans own Critical calls and containment.
 
 ## Run locally
+
 ```bash
+git clone https://github.com/Tshu282/the-investigator
+cd the-investigator
 pip install -r requirements.txt
 
-# Streamlit SOC Copilot (includes Autonomous Investigation)
-python -m streamlit run app.py
+# Add your key (never commit it):
+#   .streamlit/secrets.toml  →  GROQ_API_KEY = "gsk_..."
+# or: export GROQ_API_KEY=gsk_...
 
-# CLI agent (uses GROQ_API_KEY, or local .streamlit/secrets.toml)
+python -m streamlit run app.py
+```
+
+**CLI agent**
+```bash
 python agent.py
 ```
+
+**Docker (CLI agent)**
+```bash
+docker pull trshuler1/investigator-agent:1.0
+docker run --rm -e GROQ_API_KEY=gsk_... trshuler1/investigator-agent:1.0
+
+# Or build from this repo:
+# docker build -t investigator-agent .
+# docker run --rm -e GROQ_API_KEY=gsk_... investigator-agent
+```
+
+**Pre-pass only / accuracy check (no API key)**
+```bash
+python prepass.py evidence
+python verify_prepass.py
+```
+
+## Demo path
+1. Correlate & Triage — upload `samples/` and/or `evidence/` → expand **Deterministic pre-pass** → read report + Case metadata  
+2. Ask the Investigator — one case question (e.g. what to verify before isolate)  
+3. Optional: Autonomous Investigation — audit the tool trail (watch for `run_prepass`)
+
+## Skills built (course term)
+- Weeks 1–2: analyst prompting; email triage (SPF/DKIM/DMARC, urgency/secrecy/authority)
+- Weeks 3–4: `audit.py`, `hunt.py`, `timeline.py` (now feeding `prepass.py`)
+- Week 5: `triage.py` + `ir_runbook.md` + Actions Auto-Triage
+- Weeks 6–7: Streamlit SOC Copilot, Case Files, public deploy
+- Week 8: agentic mode (CLI + Tab 4)
+- Final: pre-pass in the critical path, confidence/Critical gates, case metadata, honest limits

@@ -85,6 +85,10 @@ def lookup_mitre(technique_id):
     key = technique_id.upper().strip()
     return MITRE.get(key, f"{key}: not in local reference — verify at attack.mitre.org")
 
+def run_prepass_tool():
+    from prepass import run_prepass_on_dir
+    return run_prepass_on_dir(EVIDENCE_DIR)
+
 # #-> The SCHEMA is all the model sees. It never sees the Python above — only
 #     these names, descriptions, and argument shapes. That's how it knows what
 #     it can call and how.
@@ -108,17 +112,28 @@ TOOLS = [
             "properties": {"technique_id": {"type": "string", "description": "A technique ID like T1059."}},
             "required": ["technique_id"]},
     }},
+    {"type": "function", "function": {
+        "name": "run_prepass",
+        "description": "Run deterministic failed-login, beaconing, and timeline checks on evidence/.",
+        "parameters": {"type": "object", "properties": {}},
+    }},
 ]
 
-AVAILABLE = {"list_evidence": list_evidence, "read_log": read_log, "lookup_mitre": lookup_mitre}
+AVAILABLE = {
+    "list_evidence": list_evidence,
+    "read_log": read_log,
+    "lookup_mitre": lookup_mitre,
+    "run_prepass": run_prepass_tool,
+}
 
 SYSTEM = """You are an autonomous SOC analyst. Investigate the incident in the
-evidence/ folder using the tools available to you. Decide for yourself which logs
-to read and which technique IDs to verify. When you have enough to be sure, stop
-calling tools and write a final report with: what happened (the attack chain in
-order), the hosts/accounts/IPs involved, a MITRE ATT&CK mapping (tactic, technique
-name, ID), and a severity (Low/Medium/High/Critical). Only cite evidence you have
-actually read. Do not invent log lines or technique IDs."""
+evidence/ folder using the tools available to you. Prefer calling run_prepass early
+for deterministic facts, then decide which logs to read and which technique IDs to
+verify. When you have enough to be sure, stop calling tools and write a final report
+with: attack chain, hosts/accounts/IPs, MITRE mapping (confidence High/Medium/Low
+per finding), and severity (Critical only with multi-source support). Only cite
+evidence you have actually read. Label containment as recommendations to verify
+before action. Do not invent log lines or technique IDs."""
 
 # ---------------------------------------------------------------------------
 # The agent loop. THIS is what "an agent" actually is: a loop where the model
@@ -161,7 +176,13 @@ def run_agent(goal, max_steps=10):
             args = json.loads(tc.function.arguments or "{}") or {}   # guard null/empty args
             console.print(f"[bold cyan]├─ step {step + 1}[/]  "
                           f"[bold yellow]{name}[/][white]({args})[/]")
-            result = AVAILABLE[name](**args)
+            if name not in AVAILABLE:
+                result = f"Unknown tool: {name}"
+            else:
+                try:
+                    result = AVAILABLE[name](**args)
+                except TypeError as e:
+                    result = f"Bad arguments for {name}: {e}"
             # Show a short preview of what the tool returned, so the trail is auditable.
             preview = str(result).replace("\n", " ")
             if len(preview) > 100:

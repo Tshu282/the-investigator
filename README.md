@@ -6,9 +6,18 @@ reports and runs an autonomous investigation agent.
 🔗 **Live app:** [https://the-investigator-aj3hchjtbanga5yjc3jodr.streamlit.app/](https://the-investigator-aj3hchjtbanga5yjc3jodr.streamlit.app/)  
 📦 **Docker image:** `docker pull trshuler1/investigator-agent:1.0`
 
-![Correlate — deterministic pre-pass](docs/screenshot1.png)
-
-![Correlate — MITRE-mapped incident report](docs/screenshot2.png)
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <img src="docs/screenshot1.png" alt="Correlate — deterministic pre-pass" />
+      <br /><sub>Deterministic pre-pass</sub>
+    </td>
+    <td align="center" width="50%">
+      <img src="docs/screenshot2.png" alt="Correlate — MITRE-mapped incident report" />
+      <br /><sub>MITRE-mapped report</sub>
+    </td>
+  </tr>
+</table>
 
 ## What it does
 - **Correlate & Triage** — upload logs; a deterministic pre-pass runs first, then Groq returns a MITRE-mapped incident report (confidence, severity gates, Flags, case metadata)
